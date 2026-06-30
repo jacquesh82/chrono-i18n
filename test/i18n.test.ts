@@ -1,5 +1,6 @@
 import * as chrono from "../src";
-import { I18nParsedResult, LocaleCode } from "../src/i18n";
+import { ChronoI18n, I18nParsedResult, LocaleCode } from "../src/i18n";
+import { LOCALE_KEYWORDS, WORD_GATED_LOCALES } from "../src/localeKeywords";
 
 // A fixed reference point: Monday 1 January 2024, 12:00 local time.
 const REF = new Date(2024, 0, 1, 12, 0, 0);
@@ -181,6 +182,58 @@ describe("i18n — robustness", () => {
         const r = parse("meeting tomorrow at 2pm");
         expect(r[0].date()).toBeInstanceOf(Date);
         expect(r[0].text.length).toBeGreaterThan(0);
+    });
+
+    test("a locale whose pipeline throws is skipped, not propagated", () => {
+        // Every candidate locale resolves to a parser that throws; the call must
+        // swallow it per-locale and yield no results instead of bubbling up.
+        const boom = new ChronoI18n(
+            () =>
+                ({
+                    parse() {
+                        throw new Error("pipeline blew up");
+                    },
+                }) as never
+        );
+        expect(() => boom.parse("meeting tomorrow", REF)).not.toThrow();
+        expect(boom.parse("meeting tomorrow", REF)).toEqual([]);
+        expect(boom.detect("meeting tomorrow", REF)).toEqual([]);
+        expect(boom.parseDate("meeting tomorrow", REF)).toBeNull();
+    });
+});
+
+describe("i18n — keyword index invariants", () => {
+    test("every word-gated locale has a non-empty keyword set", () => {
+        // Guards the gate: a Latin locale without harvested vocabulary would be
+        // silently dropped from every word-only input.
+        for (const code of WORD_GATED_LOCALES) {
+            expect(LOCALE_KEYWORDS[code]).toBeDefined();
+            expect(LOCALE_KEYWORDS[code].size).toBeGreaterThan(0);
+        }
+    });
+});
+
+describe("i18n — scoring covers ranges and repeated matches", () => {
+    test("a range result (with an end) is scored and returned", () => {
+        // Exercises the `result.end` side of the richness/strength metric.
+        const r = parse("meeting from 2pm to 4pm");
+        expect(r.length).toBeGreaterThan(0);
+        expect(r[0].locale).toBe("en");
+        expect(r[0].end).toBeDefined();
+    });
+
+    test("detect accumulates strength across a locale's multiple matches", () => {
+        // "tomorrow" and "next friday" both match `en`, so detect sums two scores.
+        expect(parse("tomorrow and next friday").filter((x) => x.locale === "en")).toHaveLength(2);
+        const ranked = chrono.i18n.detect("tomorrow and next friday", REF);
+        expect(ranked[0].locale).toBe("en");
+        expect(ranked[0].score).toBeGreaterThan(0);
+    });
+
+    test("i18n.strict uses each locale's strict configuration", () => {
+        // Strict parses formal dates but rejects casual words.
+        expect(chrono.i18n.strict.parseDate("2024-11-30", REF)).toBeInstanceOf(Date);
+        expect(chrono.i18n.strict.parse("tomorrow", REF)).toHaveLength(0);
     });
 });
 

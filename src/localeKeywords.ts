@@ -232,7 +232,8 @@ export const LOCALE_KEYWORDS: Record<string, ReadonlySet<string>> = (() => {
             c.FULL_MONTH_NAME_DICTIONARY as Dictionary,
             c.TIME_UNIT_DICTIONARY as Dictionary
         );
-        for (const word of CASUAL_WORDS[code] ?? []) {
+        // Every word-gated locale has a CASUAL_WORDS entry (asserted by tests).
+        for (const word of CASUAL_WORDS[code]) {
             for (const token of tokenize(word)) keywords.add(token);
         }
         result[code] = keywords;

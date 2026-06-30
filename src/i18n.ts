@@ -204,7 +204,8 @@ function candidateLocales(order: LocaleCode[], text: string): LocaleCode[] {
     return order.filter((code) => {
         if (CJK_LOCALES.has(code)) return hasCjk;
         if (CYRILLIC_LOCALES.has(code)) return hasCyrillic;
-        if (!WORD_GATED_LOCALES.has(code)) return true; // unknown locale → never gate out
+        /* istanbul ignore next: defensive — every supported locale is CJK, Cyrillic, or word-gated */
+        if (!WORD_GATED_LOCALES.has(code)) return true; // future/unknown locale → never gate out
         if (hasDigit) return true; // numeric/time content: language-neutral, keep all Latin
         const keywords = LOCALE_KEYWORDS[code];
         for (const token of tokens!) {
@@ -276,7 +277,8 @@ export class ChronoI18n {
             if (!kept.some((k) => overlaps(k, result))) kept.push(result);
         }
 
-        kept.sort((a, b) => a.index - b.index || priority.get(a.locale)! - priority.get(b.locale)!);
+        // Kept matches never overlap, so their start indices are all distinct.
+        kept.sort((a, b) => a.index - b.index);
         return kept;
     }
 
