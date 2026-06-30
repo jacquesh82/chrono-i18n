@@ -2,6 +2,11 @@
 
 A natural language date parser in Javascript. 
 
+> **Fork note — `chrono-i18n`.** This fork adds [**`chrono.i18n`**](#unified-i18n-parser-chronoi18n): a unified,
+> language-agnostic parser that auto-detects the language and extracts dates across all 14 bundled locales in a
+> single call — no need to pick `chrono.fr` / `chrono.de` yourself. Everything else is unchanged from upstream
+> [wanasit/chrono](https://github.com/wanasit/chrono).
+
 ![Build Status](https://github.com/github/docs/actions/workflows/test.yml/badge.svg)
 [![Coverage Status](https://img.shields.io/coverallsCoverage/github/wanasit/chrono.svg)](https://coveralls.io/r/wanasit/chrono?branch=master)
 
@@ -235,6 +240,72 @@ import chrono from 'chrono-node/en'
 // Warning: `moduleResolution` must be set to `node16` or `nodeNext` in tsconfig.json`
 import * as chrono from 'chrono-node/en'
 ```
+
+### Unified i18n parser (`chrono.i18n`)
+
+> Added by the [`chrono-i18n`](https://github.com/jacquesh82/chrono-i18n) fork.
+
+By default `chrono.parse()` handles **only English**, and the other locales (`chrono.fr`, `chrono.de`, …)
+require you to know the input language up front. **`chrono.i18n`** removes that constraint: it runs several
+locales at once and merges their results, so a single call handles mixed- or unknown-language input.
+
+```js
+import * as chrono from 'chrono-node';
+
+chrono.i18n.parse('réunion mardi prochain à 14h');  // → matched by `fr`
+chrono.i18n.parse('Treffen am Dienstag um 15 Uhr'); // → matched by `de`
+chrono.i18n.parse('riunione domani');               // → matched by `it`
+chrono.i18n.parse('meeting next friday at 5pm');    // → matched by `en`
+
+chrono.i18n.parseDate('reunión el próximo lunes');  // → a JS Date (or null)
+```
+
+Every result is tagged with the **locale** that produced it:
+
+```js
+const [result] = chrono.i18n.parse('demain à 9h');
+result.locale; // 'fr'
+```
+
+#### Restricting the candidate locales
+
+Running all 14 locales on every input is convenient but not always desirable. Pass `locales` to limit the
+candidate set. The order also sets the **tie-break priority** when two languages produce equally-strong,
+overlapping matches:
+
+```js
+// Only consider French and English; French wins ambiguous ties.
+chrono.i18n.parse(text, refDate, { locales: ['fr', 'en'] });
+
+// "01/02/2024" is ambiguous: English reads it month-first, French day-first.
+chrono.i18n.parseDate('01/02/2024', refDate, { locales: ['en'] }); // Jan 2, 2024
+chrono.i18n.parseDate('01/02/2024', refDate, { locales: ['fr'] }); // Feb 1, 2024
+```
+
+#### Detecting the language
+
+`chrono.i18n.detect()` ranks the candidate locales by how much of the text each one confidently covers — a
+lightweight language hint. Locales that match nothing are omitted:
+
+```js
+chrono.i18n.detect('Treffen am Dienstag um 15 Uhr');
+// → [ { locale: 'de', score: 22 }, ... ]
+```
+
+#### API summary
+
+| Member | Description |
+| --- | --- |
+| `i18n.parse(text, ref?, opt?)` | Parse across locales; returns `I18nParsedResult[]` (each with a `.locale`). |
+| `i18n.parseDate(text, ref?, opt?)` | Convenience wrapper returning the first result's `Date` (or `null`). |
+| `i18n.detect(text, ref?, opt?)` | Rank candidate locales by coverage. |
+| `i18n.casual` / `i18n.strict` | i18n parsers using each locale's *casual* / *strict* configuration. |
+| `i18n.supportedLocales` | The locales handled, in default priority order. |
+| `opt.locales` | Restrict the candidate set and set the tie-break order. |
+
+Supported locales: `en`, `fr`, `de`, `es`, `it`, `pt`, `nl`, `sv`, `fi`, `uk`, `ru`, `vi`, `ja`, `zh`. Each
+locale's own parsers and refiners run unchanged — `chrono.i18n` only arbitrates between their outputs, keeping
+the richest, longest, non-overlapping matches.
 
 ## Customize Chrono
 
