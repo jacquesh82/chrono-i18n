@@ -23,6 +23,10 @@ import * as vi from "./locales/vi";
 
 export { de, fr, ja, pt, nl, zh, ru, es, uk, it, sv, fi, vi };
 
+// Unified, language-agnostic parser (try-all across locales, then merge).
+import * as i18n from "./i18n";
+export { i18n };
+
 /**
  * A shortcut for {@link en | chrono.en.strict}
  */
