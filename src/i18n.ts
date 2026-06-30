@@ -145,6 +145,21 @@ function richness(result: ParsedResult): number {
     return n;
 }
 
+/**
+ * A single per-match strength metric, shared by {@link ChronoI18n.parse} (to
+ * arbitrate overlaps) and {@link ChronoI18n.detect} (to rank locales), so the
+ * two never disagree about which match is stronger. Richness dominates; the
+ * matched span length only breaks ties between equally-rich matches.
+ *
+ * `richness` maxes out at `2 × SCORE_COMPONENTS.length` (18), so any realistic
+ * span length (< `LENGTH_WEIGHT`) stays strictly below one richness step —
+ * making this exactly the old "richness, then length" lexicographic order.
+ */
+const LENGTH_WEIGHT = 10_000;
+function strength(result: ParsedResult): number {
+    return richness(result) * LENGTH_WEIGHT + Math.min(result.text.length, LENGTH_WEIGHT - 1);
+}
+
 function overlaps(a: ParsedResult, b: ParsedResult): boolean {
     const aEnd = a.index + a.text.length;
     const bEnd = b.index + b.text.length;
@@ -156,6 +171,41 @@ function resolveOrder(option: I18nParsingOption): LocaleCode[] {
     return requested.filter((code): code is LocaleCode => code in LOCALES);
 }
 
+// Script gates — a locale whose script is entirely absent from the input cannot
+// produce a match, so we skip its (expensive) pipeline. Latin-script locales are
+// always candidates because they share spellings and numeric date formats.
+const HAS_CJK = /[぀-ヿ㐀-䶿一-鿿豈-﫿ｦ-ﾟ]/;
+const HAS_CYRILLIC = /[Ѐ-ӿ]/;
+const CJK_LOCALES = new Set<LocaleCode>(["ja", "zh"]);
+const CYRILLIC_LOCALES = new Set<LocaleCode>(["uk", "ru"]);
+
+/**
+ * Narrow the candidate locales to those whose script actually appears in the
+ * text. Result-preserving: a dropped locale could not have matched anyway — it
+ * only saves the cost of running its pipeline.
+ */
+function candidateLocales(order: LocaleCode[], text: string): LocaleCode[] {
+    const hasCjk = HAS_CJK.test(text);
+    const hasCyrillic = HAS_CYRILLIC.test(text);
+    return order.filter((code) => {
+        if (CJK_LOCALES.has(code)) return hasCjk;
+        if (CYRILLIC_LOCALES.has(code)) return hasCyrillic;
+        return true;
+    });
+}
+
+/**
+ * Attach `locale` to a parsed result without mutating it. `Object.create` keeps
+ * the original on the prototype chain, so every property and method (`start`,
+ * `date()`, …) still resolves, while the original object stays untouched and the
+ * `readonly locale` contract holds.
+ */
+function tagResult(result: ParsedResult, locale: LocaleCode): I18nParsedResult {
+    const tagged = Object.create(result) as ParsedResult & { locale: LocaleCode };
+    tagged.locale = locale;
+    return tagged as I18nParsedResult;
+}
+
 /**
  * A locale-agnostic Chrono that fans a single input out to every candidate
  * locale and merges the results. Mirrors the per-locale API (`parse`, `parseDate`).
@@ -164,28 +214,42 @@ export class ChronoI18n {
     /** @param pick selects which configured Chrono (casual/strict) to use per locale. */
     constructor(private readonly pick: (entry: LocaleEntry) => Chrono) {}
 
-    parse(text: string, ref?: ParsingReference | Date, option: I18nParsingOption = {}): I18nParsedResult[] {
+    /**
+     * Run every candidate locale's pipeline **once** and tag each result with its
+     * source locale. Both `parse` and `detect` build on this, so they share the
+     * exact same raw matches (and the cost is paid only once per call).
+     */
+    private gather(
+        text: string,
+        ref: ParsingReference | Date | undefined,
+        option: I18nParsingOption
+    ): I18nParsedResult[] {
         const order = resolveOrder(option);
-        const priority = new Map<LocaleCode, number>(order.map((code, i) => [code, i]));
+        const candidates = candidateLocales(order, text);
 
         const all: I18nParsedResult[] = [];
-        for (const code of order) {
-            for (const result of this.pick(LOCALES[code]).parse(text, ref, option)) {
-                // Tag the (freshly-created) result with its source language.
-                (result as { locale?: LocaleCode }).locale = code;
-                all.push(result as I18nParsedResult);
+        for (const code of candidates) {
+            let results: ParsedResult[];
+            try {
+                results = this.pick(LOCALES[code]).parse(text, ref, option);
+            } catch {
+                // A single locale's pipeline throwing must not sink the whole call.
+                continue;
+            }
+            for (const result of results) {
+                all.push(tagResult(result, code));
             }
         }
+        return all;
+    }
 
-        // Arbitrate cross-language overlaps: prefer the richest match, then the
-        // longest span, then the highest-priority locale. Greedily keep winners.
-        all.sort((a, b) => {
-            const byRichness = richness(b) - richness(a);
-            if (byRichness !== 0) return byRichness;
-            const byLength = b.text.length - a.text.length;
-            if (byLength !== 0) return byLength;
-            return priority.get(a.locale)! - priority.get(b.locale)!;
-        });
+    parse(text: string, ref?: ParsingReference | Date, option: I18nParsingOption = {}): I18nParsedResult[] {
+        const priority = new Map<LocaleCode, number>(resolveOrder(option).map((code, i) => [code, i]));
+        const all = this.gather(text, ref, option);
+
+        // Arbitrate cross-language overlaps: prefer the strongest match (richness,
+        // then span length), then the highest-priority locale. Greedily keep winners.
+        all.sort((a, b) => strength(b) - strength(a) || priority.get(a.locale)! - priority.get(b.locale)!);
 
         const kept: I18nParsedResult[] = [];
         for (const result of all) {
@@ -203,23 +267,25 @@ export class ChronoI18n {
 
     /**
      * Rank the candidate locales by how much of the text each one confidently
-     * covers — a lightweight language hint. Locales that match nothing are omitted.
+     * covers — a lightweight language hint. Uses the same {@link strength} metric
+     * as {@link parse}, summed across a locale's matches, so the two never
+     * contradict each other. Locales that match nothing are omitted.
      */
     detect(
         text: string,
         ref?: ParsingReference | Date,
         option: I18nParsingOption = {}
     ): { locale: LocaleCode; score: number }[] {
-        return resolveOrder(option)
-            .map((locale) => {
-                let score = 0;
-                for (const result of this.pick(LOCALES[locale]).parse(text, ref, option)) {
-                    score += result.text.length * (1 + richness(result));
-                }
-                return { locale, score };
-            })
-            .filter((entry) => entry.score > 0)
-            .sort((a, b) => b.score - a.score);
+        const priority = new Map<LocaleCode, number>(resolveOrder(option).map((code, i) => [code, i]));
+
+        const scores = new Map<LocaleCode, number>();
+        for (const result of this.gather(text, ref, option)) {
+            scores.set(result.locale, (scores.get(result.locale) ?? 0) + strength(result));
+        }
+
+        return [...scores.entries()]
+            .map(([locale, score]) => ({ locale, score }))
+            .sort((a, b) => b.score - a.score || priority.get(a.locale)! - priority.get(b.locale)!);
     }
 }
 

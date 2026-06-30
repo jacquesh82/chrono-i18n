@@ -90,4 +90,96 @@ describe("i18n — helpers", () => {
         expect(ranked.length).toBeGreaterThan(0);
         expect(ranked[0].locale).toBe("de");
     });
+
+    test("detect omits locales that match nothing", () => {
+        expect(chrono.i18n.detect("xyzzy plover", REF)).toHaveLength(0);
+    });
+
+    test("detect's top locale agrees with parse's chosen locale", () => {
+        // The headline consistency property: detect and parse share one strength
+        // metric, so detect's #1 is the locale parse actually picked.
+        const text = "meeting tomorrow at 2pm";
+        const ranked = chrono.i18n.detect(text, REF);
+        const parsed = parse(text);
+        expect(ranked[0].locale).toBe(parsed[0].locale);
+        expect(ranked[0].locale).toBe("en");
+    });
+});
+
+describe("i18n — mixed-language input (the headline feature)", () => {
+    test("a sentence mixing two languages yields one match per language", () => {
+        // "tomorrow" is only English; "mardi prochain" is only French.
+        const r = parse("meeting tomorrow and réunion mardi prochain");
+        const locales = r.map((x) => x.locale);
+        expect(locales).toContain("en");
+        expect(locales).toContain("fr");
+        // Distinct, non-overlapping spans → both survive arbitration.
+        expect(r).toHaveLength(2);
+    });
+
+    test("non-overlapping matches stay sorted by their position in the text", () => {
+        const r = parse("meeting tomorrow and réunion mardi prochain");
+        for (let i = 1; i < r.length; i++) {
+            expect(r[i].index).toBeGreaterThanOrEqual(r[i - 1].index);
+        }
+    });
+});
+
+describe("i18n — CJK locales are reachable (script pre-filter must not drop them)", () => {
+    test("Japanese input is matched by a CJK locale", () => {
+        const r = parse("明日の会議");
+        expect(r.length).toBeGreaterThan(0);
+        expect(["ja", "zh"]).toContain(r[0].locale);
+    });
+
+    test("Chinese input is matched by a CJK locale", () => {
+        const r = parse("下周一开会");
+        expect(r.length).toBeGreaterThan(0);
+        expect(["ja", "zh"]).toContain(r[0].locale);
+    });
+
+    test("detect surfaces a CJK locale for CJK text", () => {
+        const ranked = chrono.i18n.detect("明日の会議", REF);
+        expect(ranked.length).toBeGreaterThan(0);
+        expect(["ja", "zh"]).toContain(ranked[0].locale);
+    });
+});
+
+describe("i18n — script pre-filter preserves Latin/numeric results", () => {
+    test("a pure-numeric date still parses (Latin locales never get filtered out)", () => {
+        const r = parse("01/02/2024");
+        expect(r.length).toBeGreaterThan(0);
+        // en leads the default priority order, so it wins the ambiguous numeric tie.
+        expect(r[0].locale).toBe("en");
+    });
+
+    test("Cyrillic input reaches the Cyrillic locales", () => {
+        const ranked = chrono.i18n.detect("встреча завтра", REF);
+        expect(ranked.length).toBeGreaterThan(0);
+        expect(["ru", "uk"]).toContain(ranked[0].locale);
+    });
+});
+
+describe("i18n — robustness", () => {
+    test("does not mutate the underlying parsed result", () => {
+        // The result object the per-locale Chrono produced must not gain a `locale`
+        // own-property; the tag lives on a non-mutating wrapper.
+        const r = parse("meeting tomorrow");
+        expect(r[0].locale).toBe("en");
+        expect(Object.prototype.hasOwnProperty.call(r[0], "locale")).toBe(true);
+        const proto = Object.getPrototypeOf(r[0]);
+        expect(Object.prototype.hasOwnProperty.call(proto, "locale")).toBe(false);
+    });
+
+    test("empty and garbage input return [] without throwing", () => {
+        expect(() => parse("")).not.toThrow();
+        expect(parse("")).toHaveLength(0);
+        expect(parse("!!! ??? ...")).toHaveLength(0);
+    });
+
+    test("tagged results keep working ParsedResult methods", () => {
+        const r = parse("meeting tomorrow at 2pm");
+        expect(r[0].date()).toBeInstanceOf(Date);
+        expect(r[0].text.length).toBeGreaterThan(0);
+    });
 });
