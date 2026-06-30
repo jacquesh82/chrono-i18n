@@ -7,8 +7,8 @@ A natural language date parser in Javascript.
 > single call — no need to pick `chrono.fr` / `chrono.de` yourself. Everything else is unchanged from upstream
 > [wanasit/chrono](https://github.com/wanasit/chrono).
 
-![Build Status](https://github.com/github/docs/actions/workflows/test.yml/badge.svg)
-[![Coverage Status](https://img.shields.io/coverallsCoverage/github/wanasit/chrono.svg)](https://coveralls.io/r/wanasit/chrono?branch=master)
+[![Run test and coverage](https://github.com/jacquesh82/chrono-i18n/actions/workflows/test.yml/badge.svg)](https://github.com/jacquesh82/chrono-i18n/actions/workflows/test.yml)
+[![Coverage Status](https://coveralls.io/repos/github/jacquesh82/chrono-i18n/badge.svg?branch=master)](https://coveralls.io/github/jacquesh82/chrono-i18n?branch=master)
 
 It is designed to handle most date/time format and extract information from any given text:
 
@@ -24,19 +24,19 @@ It is designed to handle most date/time format and extract information from any 
 
 With npm:
 ```bash
-$ npm install --save chrono-node
+$ npm install --save chrono-i18n
 ```
     
 ```javascript
-import * as chrono from 'chrono-node';
+import * as chrono from 'chrono-i18n';
 
 chrono.parseDate('An appointment on Sep 12-13'); 
 ```
 For Node.js:
 ```javascript
-const chrono = require('chrono-node');
+const chrono = require('chrono-i18n');
 
-// or `import chrono from 'chrono-node'` for ECMAScript
+// or `import chrono from 'chrono-i18n'` for ECMAScript
 ```
 
 ### What's changed in the v2
@@ -56,7 +56,7 @@ For contributors and advanced users
 Simply pass a `string` to functions `chrono.parseDate` or `chrono.parse`. 
 
 ```javascript
-import * as chrono from 'chrono-node';
+import * as chrono from 'chrono-i18n';
 
 chrono.parseDate('An appointment on Sep 12-13');
 // Fri Sep 12 2014 12:00:00 GMT-0500 (CDT)
@@ -231,14 +231,14 @@ This is because the Intl module is required to handle special characters, such a
 To avoid this, you can specify only the locale(s) you want to import:
 ```typescript
 // CommonJS (Node.js)
-const chrono = require('chrono-node/en')
+const chrono = require('chrono-i18n/en')
 
 // ECMAScript
-import chrono from 'chrono-node/en'
+import chrono from 'chrono-i18n/en'
 
 // TypeScript
 // Warning: `moduleResolution` must be set to `node16` or `nodeNext` in tsconfig.json`
-import * as chrono from 'chrono-node/en'
+import * as chrono from 'chrono-i18n/en'
 ```
 
 ### Unified i18n parser (`chrono.i18n`)
@@ -250,7 +250,7 @@ require you to know the input language up front. **`chrono.i18n`** removes that 
 locales at once and merges their results, so a single call handles mixed- or unknown-language input.
 
 ```js
-import * as chrono from 'chrono-node';
+import * as chrono from 'chrono-i18n';
 
 chrono.i18n.parse('réunion mardi prochain à 14h');  // → matched by `fr`
 chrono.i18n.parse('Treffen am Dienstag um 15 Uhr'); // → matched by `de`
@@ -397,7 +397,7 @@ This guide explains how to set up chrono project for prospective contributors.
 
 ```bash
 # Clone and install library
-$ git clone https://github.com/wanasit/chrono.git chrono
+$ git clone https://github.com/jacquesh82/chrono-i18n.git chrono-i18n
 $ cd chrono
 $ npm install
 

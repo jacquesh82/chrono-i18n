@@ -1,11 +1,25 @@
 {
-  "name": "chrono-node",
-  "description": "A natural language date parser in Javascript",
-  "homepage": "http://github.com/wanasit/chrono",
+  "name": "chrono-i18n",
+  "description": "A natural language date parser in Javascript, with a unified language-agnostic parser (chrono.i18n). Fork of chrono-node.",
+  "author": "Jacques Hullu <jacques@hullu.fr>",
+  "homepage": "https://github.com/jacquesh82/chrono-i18n",
   "repository": {
     "type": "git",
-    "url": "https://github.com/wanasit/chrono.git"
+    "url": "https://github.com/jacquesh82/chrono-i18n.git"
   },
+  "bugs": {
+    "url": "https://github.com/jacquesh82/chrono-i18n/issues"
+  },
+  "keywords": [
+    "date",
+    "time",
+    "natural language",
+    "parser",
+    "chrono",
+    "i18n",
+    "internationalization",
+    "multilingual"
+  ],
   "prettier": {
     "quoteProps": "preserve",
     "trailingComma": "es5"
@@ -15,7 +29,7 @@
     "preset": "ts-jest"
   },
   "license": "MIT",
-  "version": "2.9.1",
+  "version": "0.1.0",
   "directories": {
     "source": "./src",
     "test": "./test"

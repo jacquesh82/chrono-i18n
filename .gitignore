@@ -18,3 +18,6 @@ benchmark/results
 
 # Do not put the generated documentation in master
 docs/
+
+# Local dual-graph MCP server data
+.dual-graph/
