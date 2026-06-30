@@ -1,40 +1,38 @@
 name: Documentation
 
-# Controls when the action will run. 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+
+# Allow the workflow's GITHUB_TOKEN to push the generated docs branch.
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-          ref: documentation
-      
-      - name: Checkout and install the master
-        run: |
-          git reset --hard origin/master
-          npm install
+      - uses: actions/checkout@v4
 
-      - name: Generate the document
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm install
+
+      - name: Generate the documentation
         run: npm run document
 
-      - name: Create a commit with the document
-        run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git add -f docs
-          git commit -m 'Add documentation'
-          
-      - name: Update the documentation branch
-        run: git push -f origin documentation
-          
-          
-          
+      - name: Publish to the documentation branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+          publish_branch: documentation
