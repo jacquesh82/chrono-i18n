@@ -183,3 +183,29 @@ describe("i18n — robustness", () => {
         expect(r[0].text.length).toBeGreaterThan(0);
     });
 });
+
+describe("i18n — language gate keeps each locale's casual vocabulary reachable", () => {
+    // These digit-free phrases exercise the keyword gate: only the right locale's
+    // pipeline should need to run, and it must still win. Locks the harvested
+    // vocabulary so a broken/missing keyword (or a new locale) is caught here.
+    const cases: [string, LocaleCode][] = [
+        ["let's meet this weekend", "en"],
+        ["réunion demain", "fr"],
+        ["Termin übermorgen", "de"],
+        ["reunión mañana", "es"],
+        ["ci vediamo domani", "it"],
+        ["até amanhã", "pt"],
+        ["tot vanavond", "nl"],
+        ["vi ses imorgon", "sv"],
+        ["nähdään huomenna", "fi"],
+        ["hẹn ngày mai", "vi"],
+        ["встретимся послезавтра", "ru"],
+        ["побачимось післязавтра", "uk"],
+    ];
+
+    test.each(cases)("%s → %s", (text, expected) => {
+        const r = parse(text);
+        expect(r.length).toBeGreaterThan(0);
+        expect(r[0].locale).toBe(expected);
+    });
+});

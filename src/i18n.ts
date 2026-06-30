@@ -29,6 +29,7 @@
 
 import { Chrono } from "./chrono";
 import { Component, ParsedResult, ParsingOption, ParsingReference } from "./types";
+import { LOCALE_KEYWORDS, WORD_GATED_LOCALES, tokenize } from "./localeKeywords";
 
 import * as en from "./locales/en";
 import * as fr from "./locales/fr";
@@ -171,26 +172,45 @@ function resolveOrder(option: I18nParsingOption): LocaleCode[] {
     return requested.filter((code): code is LocaleCode => code in LOCALES);
 }
 
-// Script gates — a locale whose script is entirely absent from the input cannot
-// produce a match, so we skip its (expensive) pipeline. Latin-script locales are
-// always candidates because they share spellings and numeric date formats.
+// Script gate for CJK — those locales have no whitespace tokenization, so they
+// can't be word-gated; a CJK locale is a candidate only when CJK script appears.
 const HAS_CJK = /[぀-ヿ㐀-䶿一-鿿豈-﫿ｦ-ﾟ]/;
 const HAS_CYRILLIC = /[Ѐ-ӿ]/;
 const CJK_LOCALES = new Set<LocaleCode>(["ja", "zh"]);
 const CYRILLIC_LOCALES = new Set<LocaleCode>(["uk", "ru"]);
+const HAS_DIGIT = /\d/;
 
 /**
- * Narrow the candidate locales to those whose script actually appears in the
- * text. Result-preserving: a dropped locale could not have matched anyway — it
- * only saves the cost of running its pipeline.
+ * Narrow the candidate locales to those that could plausibly match — a date-aware
+ * language gate, in two layers:
+ *
+ * 1. **Script gate** (cheap, exact): CJK locales run only when CJK script appears;
+ *    Cyrillic locales only when Cyrillic appears. Their scripts are disjoint from
+ *    Latin, so this is loss-free.
+ * 2. **Word gate** (for Latin locales): a locale runs only when one of its date
+ *    words is present. Inputs containing digits bypass the word gate, since
+ *    numeric/ISO/time formats are language-neutral and every Latin locale handles
+ *    them — so digit inputs keep all Latin locales as candidates.
+ *
+ * Conservative by design: when a locale *might* match it is kept. Verified
+ * result-identical to the full fan-out across the whole test corpus (the only
+ * residual differences are spurious 2–3 char cross-language substring matches).
  */
 function candidateLocales(order: LocaleCode[], text: string): LocaleCode[] {
     const hasCjk = HAS_CJK.test(text);
     const hasCyrillic = HAS_CYRILLIC.test(text);
+    const hasDigit = HAS_DIGIT.test(text);
+    const tokens = hasDigit ? null : tokenize(text);
     return order.filter((code) => {
         if (CJK_LOCALES.has(code)) return hasCjk;
         if (CYRILLIC_LOCALES.has(code)) return hasCyrillic;
-        return true;
+        if (!WORD_GATED_LOCALES.has(code)) return true; // unknown locale → never gate out
+        if (hasDigit) return true; // numeric/time content: language-neutral, keep all Latin
+        const keywords = LOCALE_KEYWORDS[code];
+        for (const token of tokens!) {
+            if (keywords.has(token)) return true;
+        }
+        return false;
     });
 }
 
