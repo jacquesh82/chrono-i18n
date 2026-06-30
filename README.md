@@ -1,4 +1,4 @@
-# Chrono (v2)
+# chrono-i18n
 
 A natural language date parser in Javascript. 
 
