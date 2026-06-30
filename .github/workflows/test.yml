@@ -1,13 +1,22 @@
 name: Run test and coverage
 
-on: ["push", "pull_request"]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
 
       - name: Install
         run: npm install
@@ -16,6 +25,6 @@ jobs:
         run: npm run test
 
       - name: Send to coveralls
-        uses: coverallsapp/github-action@v1
+        uses: coverallsapp/github-action@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
